@@ -5,6 +5,7 @@ import sys
 import os
 from pathlib import Path
 import logging
+from typing import Optional
 
 class AutostartManager:
     def __init__(self):
