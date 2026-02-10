@@ -13,11 +13,22 @@ import sqlite3
 import logging
 from pathlib import Path
 from datetime import datetime
-import tkinter as tk
-from tkinter import ttk, messagebox
-import ttkbootstrap as ttkb
-from ttkbootstrap.constants import *
+import time  # Added missing import
 import yadisk
+
+# Import GUI modules conditionally
+try:
+    import tkinter as tk
+    from tkinter import ttk, messagebox
+    import ttkbootstrap as ttkb
+    from ttkbootstrap.constants import *
+    GUI_AVAILABLE = True
+except ImportError:
+    GUI_AVAILABLE = False
+    tk = None
+    ttk = None
+    messagebox = None
+    ttkb = None
 
 # Подключаем модули
 from core.sync_engine import SyncEngine
@@ -159,6 +170,11 @@ class YandexSyncPro:
     
     def _show_auth_dialog(self):
         """Диалог авторизации с валидацией"""
+        if not GUI_AVAILABLE:
+            logging.error("GUI недоступен - отсутствует tkinter или ttkbootstrap")
+            print("❌ GUI недоступен - невозможно показать диалог авторизации")
+            sys.exit(1)
+            
         root = ttkb.Window(themename="darkly")
         root.title(f"🔐 {APP_NAME} - Авторизация")
         root.geometry("550x400")
@@ -238,6 +254,11 @@ class YandexSyncPro:
     
     def _start_gui_mode(self):
         """Запуск полноценного GUI"""
+        if not GUI_AVAILABLE:
+            logging.error("GUI недоступен - отсутствует tkinter или ttkbootstrap")
+            print("❌ GUI недоступен - установите tkinter и ttkbootstrap")
+            sys.exit(1)
+            
         self.root = ttkb.Window(themename=self.config.get('theme', 'darkly'))
         self.root.title(f"☁️ {APP_NAME} v{APP_VERSION}")
         self.root.geometry(self.config.get('window_size', '1000x650'))
