@@ -106,7 +106,7 @@ class YandexSyncPro:
                 token = fernet.decrypt(raw_config['encrypted_token'].encode()).decode()
                 raw_config['yadisk_token'] = token
             
-            # Загрузка клиентских данных для OAuth
+            # Загрузка всех параметров конфигурации
             self.config = {
                 'sync_folders': raw_config.get('sync_folders', []),
                 'autostart': raw_config.get('autostart', False),
@@ -127,6 +127,7 @@ class YandexSyncPro:
         except Exception as e:
             logging.error(f"Ошибка загрузки конфигурации: {e}")
     
+    # Возврат значений по умолчанию при отсутствии файла
     return {
         'sync_folders': [],
         'autostart': False,
