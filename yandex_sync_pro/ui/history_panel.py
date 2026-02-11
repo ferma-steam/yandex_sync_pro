@@ -13,33 +13,37 @@ class HistoryPanel(ttk.Frame):
     
     def _create_widgets(self):
         # Панель фильтров
-        filter_frame = ttkb.LabelFrame(self, text="Фильтры", padding=10)
+        filter_frame = ttkb.LabelFrame(self, text="Фильтры")
         filter_frame.pack(fill=tk.X, padx=10, pady=5)
+
+        # Добавляем внутренние отступы через контейнер
+        inner_frame = ttkb.Frame(filter_frame, padding=10)
+        inner_frame.pack(fill=tk.X)
         
         # Тип операции
-        ttkb.Label(filter_frame, text="Тип:").grid(row=0, column=0, padx=5, pady=5)
+        ttkb.Label(inner_frame, text="Тип:").grid(row=0, column=0, padx=5, pady=5)
         self.type_var = tk.StringVar(value="all")
-        type_combo = ttkb.Combobox(filter_frame, textvariable=self.type_var, width=15, state="readonly")
+        type_combo = ttkb.Combobox(inner_frame, textvariable=self.type_var, width=15, state="readonly")
         type_combo['values'] = ["all", "upload", "download", "delete", "conflict"]
         type_combo.grid(row=0, column=1, padx=5, pady=5)
         type_combo.bind("<<ComboboxSelected>>", lambda e: self._apply_filters())
         
         # Дата
-        ttkb.Label(filter_frame, text="Период:").grid(row=0, column=2, padx=5, pady=5)
+        ttkb.Label(inner_frame, text="Период:").grid(row=0, column=2, padx=5, pady=5)
         self.date_var = tk.StringVar(value="all")
-        date_combo = ttkb.Combobox(filter_frame, textvariable=self.date_var, width=15, state="readonly")
+        date_combo = ttkb.Combobox(inner_frame, textvariable=self.date_var, width=15, state="readonly")
         date_combo['values'] = ["all", "today", "week", "month"]
         date_combo.grid(row=0, column=3, padx=5, pady=5)
         date_combo.bind("<<ComboboxSelected>>", lambda e: self._apply_filters())
         
         # Поиск
-        ttkb.Label(filter_frame, text="Поиск:").grid(row=0, column=4, padx=5, pady=5)
+        ttkb.Label(inner_frame, text="Поиск:").grid(row=0, column=4, padx=5, pady=5)
         self.search_var = tk.StringVar()
-        search_entry = ttkb.Entry(filter_frame, textvariable=self.search_var, width=25)
+        search_entry = ttkb.Entry(inner_frame, textvariable=self.search_var, width=25)
         search_entry.grid(row=0, column=5, padx=5, pady=5)
         search_entry.bind("<KeyRelease>", lambda e: self._apply_filters())
         
-        ttkb.Button(filter_frame, text="Очистить", command=self._clear_filters, 
+        ttkb.Button(inner_frame, text="Очистить", command=self._clear_filters, 
                    bootstyle="secondary").grid(row=0, column=6, padx=10, pady=5)
         
         # Таблица истории
