@@ -1,1 +1,68 @@
-Nothing should be ignored based on the provided file changes. The only modified file is a Python source file (`yandex_sync_pro/ui/settings_dialog.py`), which should not be ignored.
+```
+# Compiled and build artifacts
+*.pyc
+__pycache__/
+*.pyo
+*.pyd
+*.so
+*.dylib
+*.dll
+*.exe
+*.o
+*.obj
+*.out
+*.class
+
+# Dependencies
+.venv/
+venv/
+.env
+.env.local
+.env.*
+
+# Build directories
+build/
+dist/
+*.egg-info/
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs and temp files
+*.log
+*.tmp
+
+# Python specific
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+.git/modules/
+.pytest_cache/
+.mypy_cache/
+.hypothesis/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+```

@@ -92,49 +92,72 @@ class YandexSyncPro:
         logging.info(f"=== {APP_NAME} v{APP_VERSION} ЗАПУЩЕН ===")
     
     def _load_config(self):
-        """Загрузка конфигурации с расшифровкой токена"""
-        if CONFIG_FILE.exists():
-            try:
-                with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
-                    raw_config = json.load(f)
-                
-                # Расшифровка токена если зашифрован
-                if 'encrypted_token' in raw_config:
-                    from cryptography.fernet import Fernet
-                    key = self._get_encryption_key()
-                    fernet = Fernet(key)
-                    token = fernet.decrypt(raw_config['encrypted_token'].encode()).decode()
-                    raw_config['yadisk_token'] = token
-                
-                return raw_config
-            except Exception as e:
-                logging.error(f"Ошибка загрузки конфигурации: {e}")
-        
-        return {
-            'sync_folders': [],
-            'autostart': False,
-            'theme': 'darkly',
-            'window_size': '1000x650',
-            'last_sync': None
-        }
+    """Загрузка конфигурации с расшифровкой токена"""
+    if CONFIG_FILE.exists():
+        try:
+            with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
+                raw_config = json.load(f)
+            
+            # Расшифровка токена если зашифрован
+            if 'encrypted_token' in raw_config:
+                from cryptography.fernet import Fernet
+                key = self._get_encryption_key()
+                fernet = Fernet(key)
+                token = fernet.decrypt(raw_config['encrypted_token'].encode()).decode()
+                raw_config['yadisk_token'] = token
+            
+            # Загрузка клиентских данных для OAuth
+            self.config = {
+                'sync_folders': raw_config.get('sync_folders', []),
+                'autostart': raw_config.get('autostart', False),
+                'theme': raw_config.get('theme', 'darkly'),
+                'window_size': raw_config.get('window_size', '1000x650'),
+                'last_sync': raw_config.get('last_sync'),
+                'yadisk_token': raw_config.get('yadisk_token'),
+                'yadisk_client_id': raw_config.get('yadisk_client_id'),
+                'yadisk_client_secret': raw_config.get('yadisk_client_secret'),
+                'sync_interval': raw_config.get('sync_interval', 30),
+                'conflict_resolution': raw_config.get('conflict_resolution', 'rename'),
+                'use_trash': raw_config.get('use_trash', True),
+                'minimize_to_tray': raw_config.get('minimize_to_tray', True),
+                'language': raw_config.get('language', 'ru')
+            }
+            return self.config
+            
+        except Exception as e:
+            logging.error(f"Ошибка загрузки конфигурации: {e}")
+    
+    return {
+        'sync_folders': [],
+        'autostart': False,
+        'theme': 'darkly',
+        'window_size': '1000x650',
+        'last_sync': None
+    }
     
     def _save_config(self):
-        """Сохранение конфигурации с шифрованием токена"""
-        # Шифрование токена
-        if 'yadisk_token' in self.config:
-            from cryptography.fernet import Fernet
-            key = self._get_encryption_key()
-            fernet = Fernet(key)
-            encrypted = fernet.encrypt(self.config['yadisk_token'].encode()).decode()
-            
-            # Сохраняем зашифрованную версию, удаляем открытый токен
-            safe_config = {k: v for k, v in self.config.items() if k != 'yadisk_token'}
-            safe_config['encrypted_token'] = encrypted
-        else:
-            safe_config = self.config
+    """Сохранение конфигурации с шифрованием токена"""
+    # Шифрование токена
+    if 'yadisk_token' in self.config:
+        from cryptography.fernet import Fernet
+        key = self._get_encryption_key()
+        fernet = Fernet(key)
+        encrypted = fernet.encrypt(self.config['yadisk_token'].encode()).decode()
         
-        with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
-            json.dump(safe_config, f, indent=2, ensure_ascii=False)
+        # Сохраняем зашифрованную версию, удаляем открытый токен
+        safe_config = {k: v for k, v in self.config.items() if k != 'yadisk_token'}
+        safe_config['encrypted_token'] = encrypted
+        
+        # Сохраняем клиентские данные для будущих авторизаций
+        if 'yadisk_client_id' in self.config:
+            safe_config['yadisk_client_id'] = self.config['yadisk_client_id']
+        if 'yadisk_client_secret' in self.config:
+            safe_config['yadisk_client_secret'] = self.config['yadisk_client_secret']
+    else:
+        safe_config = self.config.copy()
+    
+    with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+        json.dump(safe_config, f, indent=2, ensure_ascii=False)
     
     def _get_encryption_key(self):
         """Генерация/загрузка ключа шифрования"""

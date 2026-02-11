@@ -55,62 +55,161 @@ class SettingsDialog(tk.Toplevel):
                    command=self.destroy, bootstyle="secondary", width=12).pack(side=tk.RIGHT, padx=5)
     
     def _create_account_tab(self, parent):
-        # Заголовок
-        ttkb.Label(parent, text="Подключение к Яндекс.Диску", 
-                  font=("Segoe UI", 12, "bold"), bootstyle="info").pack(anchor=tk.W, pady=(0, 15))
-        
-        # Токен
-        token_frame = ttkb.Frame(parent)
-        token_frame.pack(fill=tk.X, pady=5)
-        
-        ttkb.Label(token_frame, text="OAuth-токен:", font=("Segoe UI", 10, "bold")).pack(anchor=tk.W)
-        
-        self.token_var = tk.StringVar()
-        self.token_entry = ttkb.Entry(token_frame, textvariable=self.token_var, width=65, 
-                                    font=("Consolas", 10), show="•")
-        self.token_entry.pack(fill=tk.X, pady=(5, 0))
-        
-        # Кнопки управления токеном
-        btn_frame = ttkb.Frame(parent)
-        btn_frame.pack(fill=tk.X, pady=10)
-        
-        ttkb.Button(btn_frame, text="Показать/скрыть", 
-                   command=self._toggle_token_visibility,
-                   bootstyle="secondary", width=15).pack(side=tk.LEFT, padx=(0, 10))
-        
-        ttkb.Button(btn_frame, text="Получить токен", 
-                   command=self._open_token_page,
-                   bootstyle="info", width=15).pack(side=tk.LEFT, padx=(0, 10))
-        
-        self.test_btn = ttkb.Button(btn_frame, text="Проверить подключение", 
-                                   command=self._test_connection,
-                                   bootstyle="outline-success", width=22)
-        self.test_btn.pack(side=tk.LEFT)
-        
-        # Статус подключения
-        self.status_frame = ttkb.Frame(parent)
-        self.status_frame.pack(fill=tk.X, pady=(10, 0))
-        
-        self.status_icon = ttkb.Label(self.status_frame, text="❓", font=("Segoe UI", 16), width=2)
-        self.status_icon.pack(side=tk.LEFT, padx=(0, 10))
-        
-        self.status_label = ttkb.Label(self.status_frame, text="Не проверено", 
-                                      bootstyle="secondary", font=("Segoe UI", 10))
-        self.status_label.pack(side=tk.LEFT)
-        
-        ttkb.Separator(parent, bootstyle="primary").pack(fill=tk.X, pady=15)
-        
-        # Управление аккаунтом
-        ttkb.Label(parent, text="Управление аккаунтом", 
-                  font=("Segoe UI", 10, "bold"), bootstyle="warning").pack(anchor=tk.W, pady=(0, 10))
-        
-        ttkb.Button(parent, text="Сменить аккаунт", 
-                   command=self._change_account,
-                   bootstyle="danger-outline", width=25).pack(anchor=tk.W)
-        
-        ttkb.Label(parent, text="⚠️ При смене аккаунта все настройки синхронизации будут сохранены,\n"
-                               "но потребуется повторная авторизация", 
-                  font=("Segoe UI", 8), foreground="#ff9900").pack(anchor=tk.W, pady=(5, 0))
+    # Заголовок
+    ttkb.Label(parent, text="Авторизация в Яндекс.Диске", 
+              font=("Segoe UI", 14, "bold"), bootstyle="info").pack(anchor=tk.W, pady=(0, 15))
+    
+    # Способ авторизации
+    auth_frame = ttkb.LabelFrame(parent, text="Способ авторизации")
+    auth_frame.pack(fill=tk.X, padx=5, pady=5)
+    
+    self.auth_method = tk.StringVar(value="token")
+    auth_inner = ttkb.Frame(auth_frame, padding=10)
+    auth_inner.pack(fill=tk.X)
+    
+    ttkb.Radiobutton(
+        auth_inner, 
+        text="🔐 Вручную (ввести токен)", 
+        variable=self.auth_method, 
+        value="token",
+        command=self._toggle_auth_method
+    ).pack(anchor=tk.W, pady=3)
+    
+    ttkb.Radiobutton(
+        auth_inner, 
+        text="🌐 Через браузер (OAuth 2.0 с Client ID/Secret)", 
+        variable=self.auth_method, 
+        value="oauth",
+        command=self._toggle_auth_method
+    ).pack(anchor=tk.W, pady=3)
+    
+    ttkb.Label(
+        auth_inner,
+        text="Рекомендуется для безопасности и автоматического обновления токена",
+        font=("Segoe UI", 8),
+        foreground="#888"
+    ).pack(anchor=tk.W, padx=(20, 0), pady=(0, 10))
+    
+    # === РАЗДЕЛ 1: Ручной ввод токена ===
+    self.token_section = ttkb.Frame(parent)
+    self.token_section.pack(fill=tk.X, pady=5)
+    
+    ttkb.Label(self.token_section, text="OAuth-токен:", font=("Segoe UI", 10, "bold")).pack(anchor=tk.W)
+    
+    token_entry_frame = ttkb.Frame(self.token_section)
+    token_entry_frame.pack(fill=tk.X, pady=(5, 0))
+    
+    self.token_var = tk.StringVar()
+    self.token_entry = ttkb.Entry(token_entry_frame, textvariable=self.token_var, width=65, 
+                                font=("Consolas", 10), show="•")
+    self.token_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
+    
+    ttkb.Button(
+        token_entry_frame,
+        text="👁️",
+        command=self._toggle_token_visibility,
+        bootstyle="secondary",
+        width=3
+    ).pack(side=tk.RIGHT, padx=(5, 0))
+    
+    token_btn_frame = ttkb.Frame(self.token_section)
+    token_btn_frame.pack(fill=tk.X, pady=10)
+    
+    ttkb.Button(
+        token_btn_frame, 
+        text="Получить токен", 
+        command=self._open_token_page,
+        bootstyle="info-outline",
+        width=18
+    ).pack(side=tk.LEFT, padx=(0, 10))
+    
+    self.test_btn = ttkb.Button(
+        token_btn_frame, 
+        text="Проверить подключение", 
+        command=self._test_connection,
+        bootstyle="outline-success",
+        width=22
+    )
+    self.test_btn.pack(side=tk.LEFT)
+    
+    # Статус подключения
+    self.status_frame = ttkb.Frame(self.token_section)
+    self.status_frame.pack(fill=tk.X, pady=(10, 0))
+    
+    self.status_icon = ttkb.Label(self.status_frame, text="❓", font=("Segoe UI", 16), width=2)
+    self.status_icon.pack(side=tk.LEFT, padx=(0, 10))
+    
+    self.status_label = ttkb.Label(self.status_frame, text="Не проверено", 
+                                  bootstyle="secondary", font=("Segoe UI", 10))
+    self.status_label.pack(side=tk.LEFT)
+    
+    ttkb.Separator(parent, bootstyle="primary").pack(fill=tk.X, pady=15)
+    
+    # === РАЗДЕЛ 2: OAuth 2.0 с Client ID/Secret ===
+    self.oauth_section = ttkb.Frame(parent)
+    
+    ttkb.Label(self.oauth_section, text="Client ID:", font=("Segoe UI", 10, "bold")).pack(anchor=tk.W)
+    self.client_id_var = tk.StringVar()
+    ttkb.Entry(self.oauth_section, textvariable=self.client_id_var, width=65).pack(fill=tk.X, pady=(5, 10))
+    
+    ttkb.Label(self.oauth_section, text="Client Secret:", font=("Segoe UI", 10, "bold")).pack(anchor=tk.W)
+    self.client_secret_var = tk.StringVar()
+    secret_entry = ttkb.Entry(self.oauth_section, textvariable=self.client_secret_var, width=65, show="•")
+    secret_entry.pack(fill=tk.X, pady=(5, 10))
+    
+    oauth_btn_frame = ttkb.Frame(self.oauth_section)
+    oauth_btn_frame.pack(fill=tk.X, pady=(0, 10))
+    
+    ttkb.Button(
+        oauth_btn_frame,
+        text="👁️ Показать/скрыть",
+        command=lambda: secret_entry.config(show="" if secret_entry.cget("show") == "•" else "•"),
+        bootstyle="secondary",
+        width=18
+    ).pack(side=tk.LEFT, padx=(0, 10))
+    
+    self.oauth_validate_btn = ttkb.Button(
+        oauth_btn_frame,
+        text="Проверить клиентские данные",
+        command=self._validate_oauth_credentials,
+        bootstyle="warning-outline",
+        width=25
+    )
+    self.oauth_validate_btn.pack(side=tk.LEFT, padx=(0, 10))
+    
+    self.oauth_authorize_btn = ttkb.Button(
+        oauth_btn_frame,
+        text="🚀 Авторизоваться через браузер",
+        command=self._start_oauth_flow,
+        bootstyle="success",
+        width=28
+    )
+    self.oauth_authorize_btn.pack(side=tk.LEFT)
+    
+    self.oauth_status = ttkb.Label(
+        self.oauth_section,
+        text="Статус: готов к авторизации",
+        bootstyle="secondary",
+        font=("Segoe UI", 9)
+    )
+    self.oauth_status.pack(anchor=tk.W, pady=(10, 0))
+    
+    ttkb.Separator(parent, bootstyle="primary").pack(fill=tk.X, pady=15)
+    
+    # Управление аккаунтом
+    ttkb.Label(parent, text="Управление аккаунтом", 
+              font=("Segoe UI", 10, "bold"), bootstyle="warning").pack(anchor=tk.W, pady=(0, 10))
+    
+    ttkb.Button(parent, text="Сменить аккаунт", 
+               command=self._change_account,
+               bootstyle="danger-outline", width=25).pack(anchor=tk.W)
+    
+    ttkb.Label(parent, text="⚠️ При смене аккаунта все настройки синхронизации сохранятся,\n"
+                           "но потребуется повторная авторизация", 
+              font=("Segoe UI", 8), foreground="#ff9900").pack(anchor=tk.W, pady=(5, 0))
+    
+    # Изначально показываем только токен-секцию
+    self.oauth_section.pack_forget()
     
     def _create_sync_tab(self, parent):
         ttkb.Label(parent, text="Параметры синхронизации", 
@@ -212,13 +311,154 @@ class SettingsDialog(tk.Toplevel):
         self.lang_var.set(self.config.get('language', 'ru'))
     
     def _open_token_page(self):
-        """Открытие страницы получения токена"""
+    """Открытие страницы получения токена или регистрации приложения"""
+    if self.auth_method.get() == "token":
+        # Стандартный токен через Полигон
         webbrowser.open("https://yandex.ru/dev/disk/poligon/ ")
+    else:
+        # Регистрация OAuth-приложения
+        if messagebox.askyesno(
+            "Регистрация приложения",
+            "Для использования OAuth 2.0 нужно зарегистрировать приложение в Яндексе.\n"
+            "Открыть страницу регистрации?"
+        ):
+            webbrowser.open("https://oauth.yandex.ru/client/new ")
+            messagebox.showinfo(
+                "Инструкция",
+                "1. Название приложения: Yandex Disk Sync Pro\n"
+                "2. Callback URI: http://localhost:8080/callback\n"
+                "3. Права доступа: Яндекс.Диск (все разрешения)\n"
+                "4. После создания скопируйте Client ID и Client Secret\n"
+                "5. Вставьте их в соответствующие поля в настройках"
+            )
     
-    def _toggle_token_visibility(self):
-        """Переключение видимости токена"""
-        current_show = self.token_entry.cget("show")
-        self.token_entry.config(show="" if current_show == "•" else "•")
+    def _toggle_auth_method(self):
+    """Переключение между способами авторизации"""
+    if self.auth_method.get() == "token":
+        self.token_section.pack(fill=tk.X, pady=5)
+        self.oauth_section.pack_forget()
+    else:
+        self.token_section.pack_forget()
+        self.oauth_section.pack(fill=tk.X, pady=5)
+
+def _validate_oauth_credentials(self):
+    """Валидация клиентских данных без полной авторизации"""
+    client_id = self.client_id_var.get().strip()
+    client_secret = self.client_secret_var.get().strip()
+    
+    if not client_id or not client_secret:
+        messagebox.showerror("Ошибка", "Заполните оба поля: Client ID и Client Secret")
+        return
+    
+    from core.oauth_manager import OAuthManager
+    oauth_mgr = OAuthManager()
+    
+    valid, message = oauth_mgr.validate_credentials(client_id, client_secret)
+    
+    if valid:
+        self.oauth_status.config(text=f"✅ {message}", bootstyle="success")
+        messagebox.showinfo("Успешно", "Клиентские данные корректны!\nТеперь нажмите 'Авторизоваться через браузер'")
+    else:
+        self.oauth_status.config(text=f"❌ {message}", bootstyle="danger")
+        messagebox.showerror("Ошибка валидации", message)
+
+def _start_oauth_flow(self):
+    """Запуск полного цикла OAuth 2.0 авторизации"""
+    client_id = self.client_id_var.get().strip()
+    client_secret = self.client_secret_var.get().strip()
+    
+    if not client_id or not client_secret:
+        messagebox.showerror("Ошибка", "Заполните оба поля: Client ID и Client Secret")
+        return
+    
+    # Проверка валидности данных
+    from core.oauth_manager import OAuthManager
+    oauth_mgr = OAuthManager()
+    valid, message = oauth_mgr.validate_credentials(client_id, client_secret)
+    
+    if not valid:
+        messagebox.showerror("Ошибка", f"Некорректные клиентские данные:\n{message}")
+        return
+    
+    # Подтверждение запуска авторизации
+    if not messagebox.askyesno(
+        "Авторизация через браузер",
+        "Будет открыта страница Яндекса для авторизации приложения.\n"
+        "После подтверждения доступа браузер автоматически закроется.\n\n"
+        "Продолжить?"
+    ):
+        return
+    
+    # Обновление интерфейса
+    self.oauth_authorize_btn.config(text="Авторизация...", state="disabled", bootstyle="secondary")
+    self.oauth_status.config(text="⏳ Открытие браузера...", bootstyle="warning")
+    self.update()
+    
+    # Запуск авторизации в отдельном потоке
+    def oauth_worker():
+        try:
+            token = oauth_mgr.authorize(client_id, client_secret)
+            
+            if token:
+                # Сохраняем токен и клиентские данные
+                self.config['yadisk_token'] = token
+                self.config['yadisk_client_id'] = client_id
+                self.config['yadisk_client_secret'] = client_secret
+                
+                # Обновляем статус
+                self._update_oauth_status("✅ Авторизация успешна!", "success")
+                
+                # Автоматически переключаемся на вкладку токена и показываем результат
+                self.after(0, lambda: self._show_token_after_oauth(token))
+                
+            else:
+                self._update_oauth_status("❌ Авторизация отменена или не удалась", "danger")
+                
+        except Exception as e:
+            error_msg = str(e)
+            if len(error_msg) > 50:
+                error_msg = error_msg[:47] + "..."
+            self._update_oauth_status(f"❌ Ошибка: {error_msg}", "danger")
+        finally:
+            self.after(0, lambda: self.oauth_authorize_btn.config(
+                text="🚀 Авторизоваться через браузер", 
+                state="normal", 
+                bootstyle="success"
+            ))
+    
+    threading.Thread(target=oauth_worker, daemon=True, name="OAuthFlow").start()
+
+def _update_oauth_status(self, text, bootstyle):
+    """Обновление статуса OAuth в основном потоке"""
+    def update():
+        self.oauth_status.config(text=text, bootstyle=bootstyle)
+    self.after(0, update)
+
+def _show_token_after_oauth(self, token):
+    """Показать результат авторизации в секции токена"""
+    # Переключаемся на режим токена
+    self.auth_method.set("token")
+    self._toggle_auth_method()
+    
+    # Показываем токен (маскированный)
+    masked = token[:8] + "•" * (len(token) - 16) + token[-8:] if len(token) > 16 else "•" * len(token)
+    self.token_var.set(masked)
+    
+    # Обновляем статус подключения
+    self.status_icon.config(text="✅", bootstyle="success")
+    self.status_label.config(text="Подключено через OAuth 2.0", bootstyle="success")
+    
+    messagebox.showinfo(
+        "Успешная авторизация", 
+        "✅ Авторизация через Яндекс завершена!\n"
+        "Токен доступа автоматически сохранён.\n"
+        "Теперь вы можете настроить синхронизацию папок."
+    )
+
+def _toggle_token_visibility(self):
+    """Переключение видимости токена"""
+    current_show = self.token_entry.cget("show")
+    self.token_entry.config(show="" if current_show == "•" else "•")
     
     def _test_connection(self):
         """Асинхронная проверка подключения (гарантированно совместимо с yadisk 3.4.0)"""
