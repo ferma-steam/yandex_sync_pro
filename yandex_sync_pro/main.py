@@ -391,44 +391,53 @@ class YandexSyncPro:
         self._on_exit()
     
     def _on_exit(self):
-        """Корректное завершение работы"""
+        """Корректное завершение работы без исключений в фоновых потоках"""
         logging.info("Завершение работы приложения...")
         
         # 1. Остановка синхронизации
         self.sync_engine.stop_sync()
         
-        # 2. Остановка системного трея (если существует)
+        # 2. Остановка системного трея
         if hasattr(self, 'tray') and self.tray:
             try:
                 self.tray.stop()
             except Exception as e:
-                logging.warning(f"Ошибка остановки системного трея: {e}")
+                logging.debug(f"Ошибка остановки трея: {e}")
         
-        # 3. Сохранение состояния
-        if hasattr(self, 'root') and self.root:
+        # 3. Сохранение конфигурации
+        try:
             self.config['window_size'] = f"{self.root.winfo_width()}x{self.root.winfo_height()}"
             self.config['autostart'] = self.autostart.is_enabled()
             self.config['last_sync'] = datetime.now().isoformat() if self.sync_engine.is_running() else None
             self._save_config()
+        except Exception as e:
+            logging.error(f"Ошибка сохранения конфигурации: {e}")
         
-        # 4. Закрытие соединений
-        self.metadata.close()
+        # 4. Закрытие метаданных
+        try:
+            self.metadata.close()
+        except Exception as e:
+            logging.debug(f"Ошибка закрытия метаданных: {e}")
         
-        # 5. Уничтожение окна
-        def safe_destroy():
+        # 5. Корректное завершение Tkinter БЕЗ вызова sys.exit() из фоновых потоков
+        def safe_quit():
             try:
-                if hasattr(self, 'root') and self.root:
+                if self.root.winfo_exists():
+                    self.root.quit()
                     self.root.destroy()
             except Exception as e:
-                logging.warning(f"Ошибка уничтожения окна: {e}")
+                logging.debug(f"Ошибка уничтожения окна: {e}")
+            finally:
+                logging.info("=== ПРИЛОЖЕНИЕ ЗАВЕРШЕНО ===")
+                # Используем os._exit() для немедленного завершения БЕЗ генерации исключений
+                import os
+                os._exit(0)
         
-        # Запускаем уничтожение окна в основном потоке через after
+        # Выполняем в основном потоке через after
         try:
-            self.root.after(100, safe_destroy)
+            self.root.after(100, safe_quit)
         except Exception:
-            safe_destroy()  # Если after недоступен (окно уже уничтожено)
-        
-        sys.exit(0)
+            safe_quit()  # Если окно уже уничтожено
 
 # ==================== ТОЧКА ВХОДА ====================
 if __name__ == "__main__":
