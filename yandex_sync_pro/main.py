@@ -416,13 +416,22 @@ if __name__ == "__main__":
     autostart_mode = "--autostart" in sys.argv or "-a" in sys.argv
     
     # Проверка зависимостей
-    required_packages = ['yadisk', 'watchdog', 'ttkbootstrap', 'pystray', 'Pillow', 'cryptography']
+    required_packages = [
+        ('yadisk', 'yadisk'),
+        ('watchdog', 'watchdog'),
+        ('ttkbootstrap', 'ttkbootstrap'),
+        ('pystray', 'pystray'),
+        ('Pillow', 'PIL'),  # ВАЖНО: пакет называется Pillow, но импортируется как PIL
+        ('cryptography', 'cryptography'),
+        ('matplotlib', 'matplotlib'),
+        ('numpy', 'numpy')
+    ]
     missing = []
-    for pkg in required_packages:
+    for package_name, import_name in required_packages:
         try:
-            __import__(pkg)
+            __import__(import_name)
         except ImportError:
-            missing.append(pkg)
+            missing.append(package_name)
     
     if missing:
         print(f"❌ Отсутствуют необходимые пакеты: {', '.join(missing)}")
