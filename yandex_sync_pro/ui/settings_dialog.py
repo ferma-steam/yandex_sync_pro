@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, simpledialog  # ИСПРАВЛЕНО: добавлен simpledialog
 import ttkbootstrap as ttkb
 from cryptography.fernet import Fernet
 import yadisk
@@ -9,7 +9,7 @@ import time
 from datetime import datetime
 import requests
 import logging
-import urllib.parse
+import urllib.parse  # ИСПРАВЛЕНО: добавлен urllib.parse
 
 class SettingsDialog(tk.Toplevel):
     def __init__(self, parent, config, save_callback):
@@ -316,10 +316,11 @@ class SettingsDialog(tk.Toplevel):
                 messagebox.showinfo(
                     "Инструкция",
                     "1. Название приложения: Yandex Disk Sync Pro\n"
-                    "2. Callback URI: http://localhost:8080/callback\n"
-                    "3. Права доступа: Яндекс.Диск (все разрешения)\n"
-                    "4. После создания скопируйте Client ID и Client Secret\n"
-                    "5. Вставьте их в соответствующие поля в настройках"
+                    "2. Платформа: Настольное приложение (ОБЯЗАТЕЛЬНО!)\n"
+                    "3. Callback URI: http://localhost:8080/callback\n"
+                    "4. Права доступа: Яндекс.Диск (все разрешения)\n"
+                    "5. После создания скопируйте Client ID и Client Secret\n"
+                    "6. Вставьте их в соответствующие поля в настройках"
                 )
     
     def _test_connection(self):
@@ -427,19 +428,22 @@ class SettingsDialog(tk.Toplevel):
             messagebox.showerror("Ошибка", "Заполните оба поля: Client ID и Client Secret")
             return
         
-        # Проверяем тип приложения по настройкам
-        use_manual_flow = messagebox.askyesno(
+        # Автоматически определяем тип авторизации по настройкам
+        use_manual = False
+        if messagebox.askyesno(
             "Тип авторизации",
-            "Использовать ручной ввод кода верификации?\n"
-            "(Выберите ДА, если у вас настроено мобильное приложение)\n\n"
-            "Рекомендуется: НЕТ (автоматическая авторизация через браузер)"
-        )
+            "Ваше приложение зарегистрировано как МОБИЛЬНОЕ в Яндексе?\n"
+            "(Callback URI: https://oauth.yandex.ru/verification_code)\n\n"
+            "Если ДА — будет использован ручной ввод кода.\n"
+            "Если НЕТ (рекомендуется) — автоматическая авторизация через браузер."
+        ):
+            use_manual = True
         
-        if use_manual_flow:
+        if use_manual:
             self._start_manual_oauth_flow(client_id, client_secret)
         else:
             self._start_automatic_oauth_flow(client_id, client_secret)
-
+    
     def _start_automatic_oauth_flow(self, client_id, client_secret):
         """Автоматическая авторизация через локальный сервер"""
         REDIRECT_URI = "http://localhost:8080/callback"
@@ -453,7 +457,6 @@ class SettingsDialog(tk.Toplevel):
                 # Запуск локального сервера
                 import socket
                 from http.server import HTTPServer, BaseHTTPRequestHandler
-                import urllib.parse
                 
                 class Handler(BaseHTTPRequestHandler):
                     def do_GET(self):
@@ -485,7 +488,7 @@ class SettingsDialog(tk.Toplevel):
                 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                     s.settimeout(1)
                     if s.connect_ex(('localhost', 8080)) == 0:
-                        raise RuntimeError("Порт 8080 занят. Закройте другие приложения, использующие этот порт.")
+                        raise RuntimeError("Порт 8080 занят другим приложением. Закройте другие программы и попробуйте снова.")
                 
                 server = HTTPServer(('localhost', 8080), Handler)
                 server.oauth_code = None
@@ -563,7 +566,7 @@ class SettingsDialog(tk.Toplevel):
                 ))
         
         threading.Thread(target=oauth_worker, daemon=True, name="OAuthFlow").start()
-
+    
     def _start_manual_oauth_flow(self, client_id, client_secret):
         """Ручной ввод кода верификации (для мобильных приложений)"""
         # Генерация URL авторизации
@@ -584,7 +587,7 @@ class SettingsDialog(tk.Toplevel):
         
         webbrowser.open(auth_url)
         
-        # Запрос кода у пользователя
+        # Запрос кода у пользователя (ИСПРАВЛЕНО: simpledialog импортирован)
         code = simpledialog.askstring(
             "Код верификации",
             "Введите код верификации из адресной строки браузера:",
@@ -593,6 +596,7 @@ class SettingsDialog(tk.Toplevel):
         
         if not code:
             self.oauth_status.config(text="❌ Авторизация отменена", bootstyle="danger")
+            self.oauth_authorize_btn.config(text="🚀 Авторизоваться через браузер", state="normal", bootstyle="success")
             return
         
         self.oauth_authorize_btn.config(text="Получение токена...", state="disabled", bootstyle="secondary")
