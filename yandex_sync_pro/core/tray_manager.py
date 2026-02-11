@@ -56,25 +56,29 @@ class TrayManager:
         return image
     
     def _create_menu(self) -> Menu:
-        """Создание меню системного трея"""
-        def on_open(icon):
+        """Создание меню системного трея (ВСЕ функции принимают аргумент icon)"""
+        # КРИТИЧЕСКИ ВАЖНО: Все коллбэки ДОЛЖНЫ принимать аргумент icon
+        def on_open(icon):  # <- добавлен параметр icon
             self.toggle_callback()
         
-        def on_start(icon):
+        def on_start(icon):  # <- добавлен параметр icon
             folders = self.sync_engine.sync_folders
             if folders:
                 self.sync_engine.start_sync(folders)
                 self.update_icon('active')
+                self.show_notification("Синхронизация запущена", "Yandex Disk Sync Pro")
         
-        def on_stop(icon):
+        def on_stop(icon):  # <- добавлен параметр icon
             self.sync_engine.stop_sync()
             self.update_icon('inactive')
+            self.show_notification("Синхронизация остановлена", "Yandex Disk Sync Pro")
         
-        def on_exit(icon):
+        def on_exit(icon):  # <- добавлен параметр icon
             self.stop()
             self.exit_callback()
         
-        def on_status():
+        # Функция статуса ОБЯЗАТЕЛЬНО принимает аргумент icon
+        def on_status(icon):  # <- добавлен параметр icon
             status = self.sync_engine.get_overall_status()
             state = status['status']
             folders = status['folders']
@@ -85,16 +89,16 @@ class TrayManager:
             else:
                 return "Статус: остановлена"
         
-        # Динамическое меню с разделителями
+        # Лямбды в 'enabled' ТОЖЕ должны принимать аргумент icon
         return Menu(
             MenuItem("Открыть приложение", on_open, default=True),
             Menu.SEPARATOR,
-            MenuItem(on_status, lambda: None, enabled=False),
+            MenuItem(on_status, lambda icon: None, enabled=False),  # lambda принимает icon
             Menu.SEPARATOR,
             MenuItem("Запустить синхронизацию", on_start,
-                    enabled=lambda: not self.sync_engine.is_running()),
+                    enabled=lambda icon: not self.sync_engine.is_running()),  # lambda принимает icon
             MenuItem("Остановить синхронизацию", on_stop,
-                    enabled=lambda: self.sync_engine.is_running()),
+                    enabled=lambda icon: self.sync_engine.is_running()),  # lambda принимает icon
             Menu.SEPARATOR,
             MenuItem("Выход", on_exit)
         )
