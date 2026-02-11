@@ -221,7 +221,7 @@ class SettingsDialog(tk.Toplevel):
         self.token_entry.config(show="" if current_show == "•" else "•")
     
     def _test_connection(self):
-    """Асинхронная проверка подключения (гарантированно совместимо с yadisk 3.4.0)"""
+        """Асинхронная проверка подключения (гарантированно совместимо с yadisk 3.4.0)"""
     self._test_cancel = True
     if self._test_thread and self._test_thread.is_alive():
         return
