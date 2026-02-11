@@ -7,6 +7,7 @@ import webbrowser
 import threading
 import time
 from datetime import datetime
+import requests  # ДОБАВЛЕН ИМПОРТ
 
 class SettingsDialog(tk.Toplevel):
     def __init__(self, parent, config, save_callback):
