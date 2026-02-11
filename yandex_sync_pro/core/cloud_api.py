@@ -20,7 +20,8 @@ def retry_on_failure(max_attempts=3, delay=2):
             for attempt in range(max_attempts):
                 try:
                     return func(self, *args, **kwargs)
-                except (yadisk.exceptions.NetworkError, 
+                except (requests.exceptions.Timeout,
+                        requests.exceptions.ConnectionError,
                         yadisk.exceptions.TooManyRequestsError) as e:
                     last_exception = e
                     if attempt < max_attempts - 1:
