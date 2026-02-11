@@ -4,18 +4,23 @@ import ttkbootstrap as ttkb
 from cryptography.fernet import Fernet
 import yadisk
 import webbrowser
+import threading
+import time
+from datetime import datetime
 
 class SettingsDialog(tk.Toplevel):
     def __init__(self, parent, config, save_callback):
         super().__init__(parent)
         self.title("⚙️ Настройки")
-        self.geometry("600x500")
+        self.geometry("650x550")
         self.resizable(False, False)
         self.transient(parent)
         self.grab_set()
         
-        self.config = config.copy()  # Работаем с копией
+        self.config = config.copy()
         self.save_callback = save_callback
+        self._test_thread = None
+        self._test_cancel = False
         
         self._create_widgets()
         self._load_current_settings()
@@ -41,7 +46,7 @@ class SettingsDialog(tk.Toplevel):
         
         # Кнопки внизу
         btn_frame = ttkb.Frame(self)
-        btn_frame.pack(fill=tk.X, padx=10, pady=(0, 10))
+        btn_frame.pack(fill=tk.X, padx=10, pady=(0, 15))
         
         ttkb.Button(btn_frame, text="Сохранить", 
                    command=self._save_settings, bootstyle="success", width=12).pack(side=tk.RIGHT, padx=5)
@@ -60,16 +65,16 @@ class SettingsDialog(tk.Toplevel):
         ttkb.Label(token_frame, text="OAuth-токен:", font=("Segoe UI", 10, "bold")).pack(anchor=tk.W)
         
         self.token_var = tk.StringVar()
-        token_entry = ttkb.Entry(token_frame, textvariable=self.token_var, width=60, 
-                                font=("Consolas", 10), show="•")
-        token_entry.pack(fill=tk.X, pady=(5, 0))
+        self.token_entry = ttkb.Entry(token_frame, textvariable=self.token_var, width=65, 
+                                    font=("Consolas", 10), show="•")
+        self.token_entry.pack(fill=tk.X, pady=(5, 0))
         
         # Кнопки управления токеном
         btn_frame = ttkb.Frame(parent)
         btn_frame.pack(fill=tk.X, pady=10)
         
         ttkb.Button(btn_frame, text="Показать/скрыть", 
-                   command=lambda: token_entry.configure(show="" if token_entry.cget("show") == "•" else "•"),
+                   command=self._toggle_token_visibility,
                    bootstyle="secondary", width=15).pack(side=tk.LEFT, padx=(0, 10))
         
         ttkb.Button(btn_frame, text="Получить токен", 
@@ -78,12 +83,19 @@ class SettingsDialog(tk.Toplevel):
         
         self.test_btn = ttkb.Button(btn_frame, text="Проверить подключение", 
                                    command=self._test_connection,
-                                   bootstyle="outline-success", width=20)
+                                   bootstyle="outline-success", width=22)
         self.test_btn.pack(side=tk.LEFT)
         
         # Статус подключения
-        self.status_label = ttkb.Label(parent, text="", bootstyle="secondary")
-        self.status_label.pack(anchor=tk.W, pady=(10, 0))
+        self.status_frame = ttkb.Frame(parent)
+        self.status_frame.pack(fill=tk.X, pady=(10, 0))
+        
+        self.status_icon = ttkb.Label(self.status_frame, text="❓", font=("Segoe UI", 16), width=2)
+        self.status_icon.pack(side=tk.LEFT, padx=(0, 10))
+        
+        self.status_label = ttkb.Label(self.status_frame, text="Не проверено", 
+                                      bootstyle="secondary", font=("Segoe UI", 10))
+        self.status_label.pack(side=tk.LEFT)
         
         ttkb.Separator(parent, bootstyle="primary").pack(fill=tk.X, pady=15)
         
@@ -181,9 +193,11 @@ class SettingsDialog(tk.Toplevel):
         if token:
             masked = token[:8] + "•" * (len(token) - 16) + token[-8:] if len(token) > 16 else "•" * len(token)
             self.token_var.set(masked)
-            self.status_label.config(text="✅ Авторизован в Яндекс.Диске", bootstyle="success")
+            # Автоматически проверяем подключение при открытии настроек
+            self.after(100, self._test_connection)
         else:
-            self.status_label.config(text="❌ Не авторизован", bootstyle="danger")
+            self.status_icon.config(text="❌", bootstyle="danger")
+            self.status_label.config(text="Не авторизован", bootstyle="danger")
         
         # Синхронизация
         self.interval_var.set(self.config.get('sync_interval', 30))
@@ -198,39 +212,104 @@ class SettingsDialog(tk.Toplevel):
     
     def _open_token_page(self):
         """Открытие страницы получения токена"""
-        webbrowser.open("https://yandex.ru/dev/disk/poligon/")
+        webbrowser.open("https://yandex.ru/dev/disk/poligon/ ")
+    
+    def _toggle_token_visibility(self):
+        """Переключение видимости токена"""
+        current_show = self.token_entry.cget("show")
+        self.token_entry.config(show="" if current_show == "•" else "•")
     
     def _test_connection(self):
-        """Проверка подключения к Яндекс.Диску"""
-        token = self.token_var.get()
+        """Асинхронная проверка подключения к Яндекс.Диску"""
+        # Отмена предыдущей проверки
+        self._test_cancel = True
+        if self._test_thread and self._test_thread.is_alive():
+            return  # Ждём завершения предыдущей проверки
+        
+        token = self.token_var.get().strip()
         # Если токен замаскирован, пытаемся получить оригинальный из конфига
         if "•" in token and 'yadisk_token' in self.config:
             token = self.config['yadisk_token']
         
         if not token or "•" in token:
             messagebox.showerror("Ошибка", "Введите полный OAuth-токен для проверки подключения")
+            self.status_icon.config(text="❌", bootstyle="danger")
+            self.status_label.config(text="Токен не указан", bootstyle="danger")
             return
         
-        self.test_btn.config(text="Проверка...", state="disabled")
+        # Обновление интерфейса
+        self.test_btn.config(text="Проверка...", state="disabled", bootstyle="secondary")
+        self.status_icon.config(text="⏳", bootstyle="warning")
+        self.status_label.config(text="Проверка подключения...", bootstyle="warning")
         self.update()
         
-        try:
-            y = yadisk.YaDisk(token=token)
-            if y.check_token():
-                # Получаем информацию об аккаунте
-                user = y.get_user()
-                self.status_label.config(
-                    text=f"✅ Подключено: {user.get('display_name', 'Пользователь Яндекс')}",
-                    bootstyle="success"
+        # Сброс флага отмены
+        self._test_cancel = False
+        
+        # Запуск проверки в отдельном потоке
+        def check_worker():
+            start_time = time.time()
+            try:
+                # Устанавливаем таймаут через контекстный менеджер (библиотека yadisk не поддерживает напрямую)
+                # Используем хак с установкой таймаута через requests.Session
+                import requests
+                session = requests.Session()
+                session.request = lambda *args, **kwargs: requests.Session.request(
+                    session, *args, timeout=10, **kwargs
                 )
-                # Сохраняем токен во временную конфигурацию
+                
+                y = yadisk.YaDisk(token=token, session=session)
+                
+                # Проверка токена с таймаутом
+                if self._test_cancel:
+                    return
+                
+                if not y.check_token():
+                    if self._test_cancel:
+                        return
+                    self._update_status_ui("❌", "Неверный токен", "danger")
+                    return
+                
+                if self._test_cancel:
+                    return
+                
+                # Получение информации об аккаунте
+                user = y.get_user()
+                display_name = user.get('display_name', 'Пользователь Яндекс')
+                
+                if self._test_cancel:
+                    return
+                
+                # Успешное подключение
+                self._update_status_ui("✅", f"Подключено: {display_name}", "success")
                 self.config['yadisk_token'] = token
-            else:
-                self.status_label.config(text="❌ Неверный токен", bootstyle="danger")
-        except Exception as e:
-            self.status_label.config(text=f"❌ Ошибка: {str(e)}", bootstyle="danger")
-        finally:
-            self.test_btn.config(text="Проверить подключение", state="normal")
+                
+            except Exception as e:
+                if not self._test_cancel:
+                    error_msg = str(e)
+                    # Обрезаем слишком длинные сообщения об ошибках
+                    if len(error_msg) > 50:
+                        error_msg = error_msg[:47] + "..."
+                    self._update_status_ui("❌", f"Ошибка: {error_msg}", "danger")
+            finally:
+                if not self._test_cancel:
+                    self._update_button_ui("Проверить подключение", "outline-success", "normal")
+        
+        self._test_thread = threading.Thread(target=check_worker, daemon=True, name="TokenCheck")
+        self._test_thread.start()
+    
+    def _update_status_ui(self, icon_text, label_text, bootstyle):
+        """Обновление статуса в основном потоке"""
+        def update():
+            self.status_icon.config(text=icon_text, bootstyle=bootstyle)
+            self.status_label.config(text=label_text, bootstyle=bootstyle)
+        self.after(0, update)
+    
+    def _update_button_ui(self, text, bootstyle, state):
+        """Обновление кнопки в основном потоке"""
+        def update():
+            self.test_btn.config(text=text, bootstyle=bootstyle, state=state)
+        self.after(0, update)
     
     def _change_account(self):
         """Смена аккаунта (очистка токена)"""
@@ -241,7 +320,7 @@ class SettingsDialog(tk.Toplevel):
             self.config.pop('yadisk_token', None)
             self.config.pop('encrypted_token', None)
             self.token_var.set("")
-            self.status_label.config(text="❌ Не авторизован", bootstyle="danger")
+            self._update_status_ui("❌", "Аккаунт отвязан", "danger")
             messagebox.showinfo("Успешно", "Аккаунт отвязан. Введите новый токен для подключения.")
     
     def _save_settings(self):
