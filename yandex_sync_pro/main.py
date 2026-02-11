@@ -92,7 +92,7 @@ class YandexSyncPro:
         logging.info(f"=== {APP_NAME} v{APP_VERSION} ЗАПУЩЕН ===")
     
     def _load_config(self):
-    """Загрузка конфигурации с расшифровкой токена"""
+        """Загрузка конфигурации с расшифровкой токена"""
     if CONFIG_FILE.exists():
         try:
             with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
@@ -137,7 +137,7 @@ class YandexSyncPro:
     }
     
     def _save_config(self):
-    """Сохранение конфигурации с шифрованием токена"""
+        """Сохранение конфигурации с шифрованием токена"""
     # Шифрование токена
     if 'yadisk_token' in self.config:
         from cryptography.fernet import Fernet
