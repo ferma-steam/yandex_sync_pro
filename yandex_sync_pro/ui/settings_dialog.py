@@ -221,79 +221,76 @@ class SettingsDialog(tk.Toplevel):
         self.token_entry.config(show="" if current_show == "•" else "•")
     
     def _test_connection(self):
-        """Асинхронная проверка подключения к Яндекс.Диску"""
+        """Асинхронная проверка подключения к Яндекс.Диску (совместимо с yadisk 3.4.0)"""
         # Отмена предыдущей проверки
         self._test_cancel = True
         if self._test_thread and self._test_thread.is_alive():
-            return  # Ждём завершения предыдущей проверки
-        
+            return
+
         token = self.token_var.get().strip()
-        # Если токен замаскирован, пытаемся получить оригинальный из конфига
         if "•" in token and 'yadisk_token' in self.config:
             token = self.config['yadisk_token']
-        
+
         if not token or "•" in token:
             messagebox.showerror("Ошибка", "Введите полный OAuth-токен для проверки подключения")
             self.status_icon.config(text="❌", bootstyle="danger")
             self.status_label.config(text="Токен не указан", bootstyle="danger")
             return
-        
+
         # Обновление интерфейса
         self.test_btn.config(text="Проверка...", state="disabled", bootstyle="secondary")
         self.status_icon.config(text="⏳", bootstyle="warning")
         self.status_label.config(text="Проверка подключения...", bootstyle="warning")
         self.update()
-        
-        # Сброс флага отмены
+
         self._test_cancel = False
-        
-        # Запуск проверки в отдельном потоке
+
         def check_worker():
             try:
-                # Правильный способ установки таймаута для yadisk
-                y = yadisk.YaDisk(
-                    token=token,
-                    timeout=10  # Устанавливаем таймаут НАПРЯМУЮ через аргумент
-                )
-                
-                # Проверка токена
-                if self._test_cancel:
-                    return
-                
-                # ВАЖНО: Используем проверку через get_user() вместо check_token()
-                # Так как check_token() может не возвращать полезные ошибки
-                user = y.get_user()
+                # ВАЖНО: В версии 3.4.0 НЕЛЬЗЯ передавать timeout в конструктор!
+                y = yadisk.YaDisk(token=token)
                 
                 if self._test_cancel:
                     return
-                
-                # Успешное подключение
+
+                # Таймаут устанавливается ПРЯМО В МЕТОДЕ
+                user = y.get_user(timeout=10)  # <- timeout здесь!
+
+                if self._test_cancel:
+                    return
+
                 display_name = user.get('display_name', 'Пользователь Яндекс')
                 self._update_status_ui("✅", f"Подключено: {display_name}", "success")
                 self.config['yadisk_token'] = token
-                
+
             except yadisk.exceptions.UnauthorizedError:
                 if not self._test_cancel:
                     self._update_status_ui("❌", "Неверный токен", "danger")
-            except yadisk.exceptions.NetworkError:
+            except requests.exceptions.Timeout:
                 if not self._test_cancel:
-                    self._update_status_ui("❌", "Сеть недоступна", "danger")
+                    self._update_status_ui("❌", "Таймаут подключения", "danger")
+            except requests.exceptions.ConnectionError:
+                if not self._test_cancel:
+                    self._update_status_ui("❌", "Нет интернета", "danger")
+            except requests.exceptions.RequestException as e:
+                if not self._test_cancel:
+                    error_msg = str(e)
+                    if len(error_msg) > 40:
+                        error_msg = error_msg[:37] + "..."
+                    self._update_status_ui("❌", f"Сетевая ошибка: {error_msg}", "danger")
             except yadisk.exceptions.TooManyRequestsError:
                 if not self._test_cancel:
                     self._update_status_ui("⚠️", "Слишком много запросов", "warning")
-            except yadisk.exceptions.RequestError as e:
-                if not self._test_cancel:
-                    self._update_status_ui("❌", f"Ошибка запроса: {e.message}", "danger")
             except Exception as e:
                 error_msg = str(e)
-                if len(error_msg) > 50:
-                    error_msg = error_msg[:47] + "..."
+                if len(error_msg) > 40:
+                    error_msg = error_msg[:37] + "..."
                 if not self._test_cancel:
                     self._update_status_ui("❌", f"Ошибка: {error_msg}", "danger")
             finally:
                 if not self._test_cancel:
                     self._update_button_ui("Проверить подключение", "outline-success", "normal")
-        
+
         self._test_thread = threading.Thread(target=check_worker, daemon=True, name="TokenCheck")
         self._test_thread.start()
     
