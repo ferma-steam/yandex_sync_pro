@@ -1,1 +1,1 @@
-Nothing should be ignored based on the provided file changes. The modification of 'yandex_sync_pro/ui/settings_dialog.py' is a source code file that should be tracked in version control.
+Nothing needs to be added to the .gitignore file since only a Python source file was modified and no build artifacts, dependencies, or temporary files were detected in the changes.
