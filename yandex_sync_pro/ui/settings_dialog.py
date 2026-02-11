@@ -221,78 +221,73 @@ class SettingsDialog(tk.Toplevel):
         self.token_entry.config(show="" if current_show == "•" else "•")
     
     def _test_connection(self):
-        """Асинхронная проверка подключения к Яндекс.Диску (совместимо с yadisk 3.4.0)"""
-        # Отмена предыдущей проверки
-        self._test_cancel = True
-        if self._test_thread and self._test_thread.is_alive():
-            return
+    """Асинхронная проверка подключения (гарантированно совместимо с yadisk 3.4.0)"""
+    self._test_cancel = True
+    if self._test_thread and self._test_thread.is_alive():
+        return
 
-        token = self.token_var.get().strip()
-        if "•" in token and 'yadisk_token' in self.config:
-            token = self.config['yadisk_token']
+    token = self.token_var.get().strip()
+    if "•" in token and 'yadisk_token' in self.config:
+        token = self.config['yadisk_token']
 
-        if not token or "•" in token:
-            messagebox.showerror("Ошибка", "Введите полный OAuth-токен для проверки подключения")
-            self.status_icon.config(text="❌", bootstyle="danger")
-            self.status_label.config(text="Токен не указан", bootstyle="danger")
-            return
+    if not token or "•" in token:
+        messagebox.showerror("Ошибка", "Введите полный OAuth-токен")
+        self.status_icon.config(text="❌", bootstyle="danger")
+        self.status_label.config(text="Токен не указан", bootstyle="danger")
+        return
 
-        # Обновление интерфейса
-        self.test_btn.config(text="Проверка...", state="disabled", bootstyle="secondary")
-        self.status_icon.config(text="⏳", bootstyle="warning")
-        self.status_label.config(text="Проверка подключения...", bootstyle="warning")
-        self.update()
+    self.test_btn.config(text="Проверка...", state="disabled", bootstyle="secondary")
+    self.status_icon.config(text="⏳", bootstyle="warning")
+    self.status_label.config(text="Проверка...", bootstyle="warning")
+    self.update()
 
-        self._test_cancel = False
+    self._test_cancel = False
 
-        def check_worker():
-            try:
-                # ВАЖНО: В версии 3.4.0 НЕЛЬЗЯ передавать timeout в конструктор!
-                y = yadisk.YaDisk(token=token)
-                
-                if self._test_cancel:
-                    return
+    def check_worker():
+        try:
+            # КРИТИЧЕСКИ ВАЖНО: в 3.4.0 НЕТ аргумента timeout в конструкторе!
+            y = yadisk.YaDisk(token=token)
+            
+            if self._test_cancel:
+                return
 
-                # Таймаут устанавливается ПРЯМО В МЕТОДЕ
-                user = y.get_user(timeout=10)  # <- timeout здесь!
+            # Таймаут устанавливается ТОЛЬКО в методах
+            # Используем простой запрос к корню диска вместо get_user()
+            disk_info = y.get_disk_info(timeout=10)
+            
+            if self._test_cancel:
+                return
 
-                if self._test_cancel:
-                    return
+            # Успешно!
+            self._update_status_ui("✅", "Подключено к Яндекс.Диску", "success")
+            self.config['yadisk_token'] = token
 
-                display_name = user.get('display_name', 'Пользователь Яндекс')
-                self._update_status_ui("✅", f"Подключено: {display_name}", "success")
-                self.config['yadisk_token'] = token
-
-            except yadisk.exceptions.UnauthorizedError:
-                if not self._test_cancel:
-                    self._update_status_ui("❌", "Неверный токен", "danger")
-            except requests.exceptions.Timeout:
-                if not self._test_cancel:
-                    self._update_status_ui("❌", "Таймаут подключения", "danger")
-            except requests.exceptions.ConnectionError:
-                if not self._test_cancel:
-                    self._update_status_ui("❌", "Нет интернета", "danger")
-            except requests.exceptions.RequestException as e:
-                if not self._test_cancel:
-                    error_msg = str(e)
-                    if len(error_msg) > 40:
-                        error_msg = error_msg[:37] + "..."
-                    self._update_status_ui("❌", f"Сетевая ошибка: {error_msg}", "danger")
-            except yadisk.exceptions.TooManyRequestsError:
-                if not self._test_cancel:
-                    self._update_status_ui("⚠️", "Слишком много запросов", "warning")
-            except Exception as e:
+        except yadisk.exceptions.UnauthorizedError:
+            if not self._test_cancel:
+                self._update_status_ui("❌", "Неверный токен", "danger")
+        except yadisk.exceptions.ForbiddenError:
+            if not self._test_cancel:
+                self._update_status_ui("❌", "Доступ запрещён", "danger")
+        except yadisk.exceptions.TooManyRequestsError:
+            if not self._test_cancel:
+                self._update_status_ui("⚠️", "Лимит запросов", "warning")
+        except Exception as e:
+            # Обрабатываем ВСЕ остальные ошибки как сетевые/неизвестные
+            if not self._test_cancel:
                 error_msg = str(e)
-                if len(error_msg) > 40:
-                    error_msg = error_msg[:37] + "..."
-                if not self._test_cancel:
-                    self._update_status_ui("❌", f"Ошибка: {error_msg}", "danger")
-            finally:
-                if not self._test_cancel:
-                    self._update_button_ui("Проверить подключение", "outline-success", "normal")
+                if "timeout" in error_msg.lower():
+                    display_msg = "Таймаут подключения"
+                elif "connection" in error_msg.lower() or "getaddrinfo" in error_msg.lower():
+                    display_msg = "Нет интернета"
+                else:
+                    display_msg = "Ошибка подключения"
+                self._update_status_ui("❌", display_msg, "danger")
+        finally:
+            if not self._test_cancel:
+                self._update_button_ui("Проверить", "outline-success", "normal")
 
-        self._test_thread = threading.Thread(target=check_worker, daemon=True, name="TokenCheck")
-        self._test_thread.start()
+    self._test_thread = threading.Thread(target=check_worker, daemon=True, name="TokenCheck")
+    self._test_thread.start()
     
     def _update_status_ui(self, icon_text, label_text, bootstyle):
         """Обновление статуса в основном потоке"""
