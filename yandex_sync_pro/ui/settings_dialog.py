@@ -248,48 +248,46 @@ class SettingsDialog(tk.Toplevel):
         
         # Запуск проверки в отдельном потоке
         def check_worker():
-            start_time = time.time()
             try:
-                # Устанавливаем таймаут через контекстный менеджер (библиотека yadisk не поддерживает напрямую)
-                # Используем хак с установкой таймаута через requests.Session
-                import requests
-                session = requests.Session()
-                session.request = lambda *args, **kwargs: requests.Session.request(
-                    session, *args, timeout=10, **kwargs
+                # Правильный способ установки таймаута для yadisk
+                y = yadisk.YaDisk(
+                    token=token,
+                    timeout=10  # Устанавливаем таймаут НАПРЯМУЮ через аргумент
                 )
                 
-                y = yadisk.YaDisk(token=token, session=session)
-                
-                # Проверка токена с таймаутом
+                # Проверка токена
                 if self._test_cancel:
                     return
                 
-                if not y.check_token():
-                    if self._test_cancel:
-                        return
-                    self._update_status_ui("❌", "Неверный токен", "danger")
-                    return
-                
-                if self._test_cancel:
-                    return
-                
-                # Получение информации об аккаунте
+                # ВАЖНО: Используем проверку через get_user() вместо check_token()
+                # Так как check_token() может не возвращать полезные ошибки
                 user = y.get_user()
-                display_name = user.get('display_name', 'Пользователь Яндекс')
                 
                 if self._test_cancel:
                     return
                 
                 # Успешное подключение
+                display_name = user.get('display_name', 'Пользователь Яндекс')
                 self._update_status_ui("✅", f"Подключено: {display_name}", "success")
                 self.config['yadisk_token'] = token
                 
-            except Exception as e:
+            except yadisk.exceptions.UnauthorizedError:
                 if not self._test_cancel:
-                    error_msg = str(e)
-                    # Обрезаем слишком длинные сообщения об ошибках
-                    if len(error_msg) > 50:
-                        error_msg = error_msg[:47] + "..."
+                    self._update_status_ui("❌", "Неверный токен", "danger")
+            except yadisk.exceptions.NetworkError:
+                if not self._test_cancel:
+                    self._update_status_ui("❌", "Сеть недоступна", "danger")
+            except yadisk.exceptions.TooManyRequestsError:
+                if not self._test_cancel:
+                    self._update_status_ui("⚠️", "Слишком много запросов", "warning")
+            except yadisk.exceptions.RequestError as e:
+                if not self._test_cancel:
+                    self._update_status_ui("❌", f"Ошибка запроса: {e.message}", "danger")
+            except Exception as e:
+                error_msg = str(e)
+                if len(error_msg) > 50:
+                    error_msg = error_msg[:47] + "..."
+                if not self._test_cancel:
                     self._update_status_ui("❌", f"Ошибка: {error_msg}", "danger")
             finally:
                 if not self._test_cancel:
