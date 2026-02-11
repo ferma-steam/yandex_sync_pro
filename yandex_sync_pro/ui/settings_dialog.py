@@ -427,38 +427,33 @@ class SettingsDialog(tk.Toplevel):
             messagebox.showerror("Ошибка", "Заполните оба поля: Client ID и Client Secret")
             return
         
-        try:
-            if not client_id or not client_secret:
-                raise ValueError("Client ID и Client Secret не могут быть пустыми")
-            
-            if len(client_id) < 10 or len(client_secret) < 20:
-                raise ValueError("Некорректный формат Client ID или Client Secret")
-            
-            y = yadisk.YaDisk(id=client_id, secret=client_secret)
-            
-        except Exception as e:
-            messagebox.showerror("Ошибка", f"Некорректные клиентские данные:\n{str(e)}")
-            return
+        # Проверяем тип приложения по настройкам
+        use_manual_flow = messagebox.askyesno(
+            "Тип авторизации",
+            "Использовать ручной ввод кода верификации?\n"
+            "(Выберите ДА, если у вас настроено мобильное приложение)\n\n"
+            "Рекомендуется: НЕТ (автоматическая авторизация через браузер)"
+        )
         
-        if not messagebox.askyesno(
-            "Авторизация через браузер",
-            "Будет открыта страница Яндекса для авторизации приложения.\n"
-            "После подтверждения доступа браузер автоматически закроется.\n\n"
-            "Продолжить?"
-        ):
-            return
+        if use_manual_flow:
+            self._start_manual_oauth_flow(client_id, client_secret)
+        else:
+            self._start_automatic_oauth_flow(client_id, client_secret)
+
+    def _start_automatic_oauth_flow(self, client_id, client_secret):
+        """Автоматическая авторизация через локальный сервер"""
+        REDIRECT_URI = "http://localhost:8080/callback"
         
         self.oauth_authorize_btn.config(text="Авторизация...", state="disabled", bootstyle="secondary")
-        self.oauth_status.config(text="⏳ Открытие браузера...", bootstyle="warning")
+        self.oauth_status.config(text="⏳ Запуск локального сервера...", bootstyle="warning")
         self.update()
         
         def oauth_worker():
             try:
-                auth_url = f"https://oauth.yandex.ru/authorize?response_type=code&client_id={client_id}&redirect_uri=http://localhost:8080/callback&force_confirm=true"
-                
                 # Запуск локального сервера
                 import socket
                 from http.server import HTTPServer, BaseHTTPRequestHandler
+                import urllib.parse
                 
                 class Handler(BaseHTTPRequestHandler):
                     def do_GET(self):
@@ -490,7 +485,7 @@ class SettingsDialog(tk.Toplevel):
                 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                     s.settimeout(1)
                     if s.connect_ex(('localhost', 8080)) == 0:
-                        raise RuntimeError("Порт 8080 занят другим приложением")
+                        raise RuntimeError("Порт 8080 занят. Закройте другие приложения, использующие этот порт.")
                 
                 server = HTTPServer(('localhost', 8080), Handler)
                 server.oauth_code = None
@@ -499,6 +494,17 @@ class SettingsDialog(tk.Toplevel):
                 server_thread.start()
                 
                 time.sleep(0.5)
+                
+                # Формируем URL авторизации
+                auth_url = (
+                    f"https://oauth.yandex.ru/authorize"
+                    f"?response_type=code"
+                    f"&client_id={client_id}"
+                    f"&redirect_uri={urllib.parse.quote(REDIRECT_URI)}"
+                    f"&force_confirm=true"
+                )
+                
+                self._update_oauth_status("⏳ Открытие браузера...", "warning")
                 webbrowser.open(auth_url)
                 
                 # Ожидание кода (макс 120 сек)
@@ -512,7 +518,7 @@ class SettingsDialog(tk.Toplevel):
                 server.server_close()
                 
                 if not code:
-                    raise RuntimeError("Таймаут ожидания авторизации")
+                    raise RuntimeError("Таймаут ожидания авторизации (120 сек)")
                 
                 # Получение токена
                 response = requests.post(
@@ -522,7 +528,7 @@ class SettingsDialog(tk.Toplevel):
                         'code': code,
                         'client_id': client_id,
                         'client_secret': client_secret,
-                        'redirect_uri': 'http://localhost:8080/callback'
+                        'redirect_uri': REDIRECT_URI
                     },
                     timeout=10
                 )
@@ -542,8 +548,12 @@ class SettingsDialog(tk.Toplevel):
                 
             except Exception as e:
                 error_msg = str(e)
-                if len(error_msg) > 50:
-                    error_msg = error_msg[:47] + "..."
+                if "Порт 8080 занят" in error_msg:
+                    error_msg = "Порт 8080 занят другим приложением. Закройте другие программы и попробуйте снова."
+                elif "timeout" in error_msg.lower():
+                    error_msg = "Таймаут подключения к Яндексу"
+                elif "connection" in error_msg.lower():
+                    error_msg = "Нет подключения к интернету"
                 self._update_oauth_status(f"❌ Ошибка: {error_msg}", "danger")
             finally:
                 self.after(0, lambda: self.oauth_authorize_btn.config(
@@ -553,6 +563,83 @@ class SettingsDialog(tk.Toplevel):
                 ))
         
         threading.Thread(target=oauth_worker, daemon=True, name="OAuthFlow").start()
+
+    def _start_manual_oauth_flow(self, client_id, client_secret):
+        """Ручной ввод кода верификации (для мобильных приложений)"""
+        # Генерация URL авторизации
+        auth_url = (
+            f"https://oauth.yandex.ru/authorize"
+            f"?response_type=code"
+            f"&client_id={client_id}"
+            f"&redirect_uri=https://oauth.yandex.ru/verification_code"
+        )
+        
+        messagebox.showinfo(
+            "Ручная авторизация",
+            "1. Откроется страница Яндекса для авторизации\n"
+            "2. Подтвердите доступ к Диску\n"
+            "3. Скопируйте КОД ВЕРИФИКАЦИИ из адресной строки браузера\n"
+            "4. Вставьте код в появившееся окно"
+        )
+        
+        webbrowser.open(auth_url)
+        
+        # Запрос кода у пользователя
+        code = simpledialog.askstring(
+            "Код верификации",
+            "Введите код верификации из адресной строки браузера:",
+            parent=self
+        )
+        
+        if not code:
+            self.oauth_status.config(text="❌ Авторизация отменена", bootstyle="danger")
+            return
+        
+        self.oauth_authorize_btn.config(text="Получение токена...", state="disabled", bootstyle="secondary")
+        self.oauth_status.config(text="⏳ Получение токена...", bootstyle="warning")
+        self.update()
+        
+        def token_worker():
+            try:
+                # Обмен кода на токен
+                response = requests.post(
+                    "https://oauth.yandex.ru/token",
+                    data={
+                        'grant_type': 'authorization_code',
+                        'code': code,
+                        'client_id': client_id,
+                        'client_secret': client_secret,
+                        'redirect_uri': 'https://oauth.yandex.ru/verification_code'
+                    },
+                    timeout=10
+                )
+                
+                if response.status_code != 200:
+                    raise RuntimeError(f"Ошибка получения токена: {response.text}")
+                
+                token = response.json()['access_token']
+                
+                # Сохранение данных
+                self.config['yadisk_token'] = token
+                self.config['yadisk_client_id'] = client_id
+                self.config['yadisk_client_secret'] = client_secret
+                
+                self._update_oauth_status("✅ Токен получен!", "success")
+                self.after(0, lambda: self._show_token_after_oauth(token))
+                
+            except Exception as e:
+                error_msg = str(e)
+                if "invalid_grant" in error_msg.lower():
+                    error_msg = "Неверный код верификации или срок действия кода истёк"
+                self._update_oauth_status(f"❌ Ошибка: {error_msg}", "danger")
+            finally:
+                self.after(0, lambda: self.oauth_authorize_btn.config(
+                    text="🚀 Авторизоваться через браузер", 
+                    state="normal", 
+                    bootstyle="success"
+                ))
+        
+        threading.Thread(target=token_worker, daemon=True, name="TokenExchange").start()
     
     def _update_oauth_status(self, text, bootstyle):
         def update():
