@@ -394,20 +394,40 @@ class YandexSyncPro:
         """Корректное завершение работы"""
         logging.info("Завершение работы приложения...")
         
-        # Сохранение состояния
-        self.config['window_size'] = f"{self.root.winfo_width()}x{self.root.winfo_height()}"
-        self.config['autostart'] = self.autostart.is_enabled()
-        self.config['last_sync'] = datetime.now().isoformat() if self.sync_engine.is_running() else None
-        self._save_config()
-        
-        # Остановка синхронизации
+        # 1. Остановка синхронизации
         self.sync_engine.stop_sync()
         
-        # Закрытие соединений
+        # 2. Остановка системного трея (если существует)
+        if hasattr(self, 'tray') and self.tray:
+            try:
+                self.tray.stop()
+            except Exception as e:
+                logging.warning(f"Ошибка остановки системного трея: {e}")
+        
+        # 3. Сохранение состояния
+        if hasattr(self, 'root') and self.root:
+            self.config['window_size'] = f"{self.root.winfo_width()}x{self.root.winfo_height()}"
+            self.config['autostart'] = self.autostart.is_enabled()
+            self.config['last_sync'] = datetime.now().isoformat() if self.sync_engine.is_running() else None
+            self._save_config()
+        
+        # 4. Закрытие соединений
         self.metadata.close()
         
-        logging.info("=== ПРИЛОЖЕНИЕ ЗАВЕРШЕНО ===")
-        self.root.destroy()
+        # 5. Уничтожение окна
+        def safe_destroy():
+            try:
+                if hasattr(self, 'root') and self.root:
+                    self.root.destroy()
+            except Exception as e:
+                logging.warning(f"Ошибка уничтожения окна: {e}")
+        
+        # Запускаем уничтожение окна в основном потоке через after
+        try:
+            self.root.after(100, safe_destroy)
+        except Exception:
+            safe_destroy()  # Если after недоступен (окно уже уничтожено)
+        
         sys.exit(0)
 
 # ==================== ТОЧКА ВХОДА ====================
