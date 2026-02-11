@@ -7,7 +7,7 @@ import threading
 import hashlib
 import shutil
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import List, Dict, Optional
 import logging
 import yadisk
@@ -164,8 +164,6 @@ class SyncEngine:
         if not self.running:
             return
         
-        rel_path = filepath.relative_to(folder['local'])
-        
         # Игнорируем служебные файлы
         if self._is_ignored_file(filepath.name):
             return
@@ -253,7 +251,7 @@ class SyncEngine:
     
     def _sync_file(self, filepath: str, folder: Dict):
         """Синхронизация одного файла"""
-        if not self.running:
+        if not self.running or not self.yadisk_api.is_authorized():
             return
         
         # Установка статуса "в процессе"
@@ -262,7 +260,6 @@ class SyncEngine:
         try:
             remote_path = self._get_remote_path(filepath, folder)
             local_hash = self._get_file_hash(filepath)
-            local_mtime = os.path.getmtime(filepath)
             
             # Проверка наличия файла в облаке
             cloud_meta = None
@@ -313,58 +310,55 @@ class SyncEngine:
             self.sync_status[filepath] = SyncStatus.SYNCED
             logging.info(f"Загружен файл: {filepath} -> {remote_path}")
             
-                    except requests.exceptions.Timeout:
-                error_msg = "Таймаут подключения к Яндекс.Диску"
-                self.sync_status[filepath] = SyncStatus.ERROR
-                self.metadata.add_operation(
-                    operation='upload',
-                    path=filepath,
-                    status='error',
-                    size=os.path.getsize(filepath) if os.path.exists(filepath) else 0,
-                    details=error_msg
-                )
-                logging.error(f"Таймаут при синхронизации {filepath}: {error_msg}")
-
-            except requests.exceptions.ConnectionError:
-                error_msg = "Нет подключения к интернету"
-                self.sync_status[filepath] = SyncStatus.ERROR
-                self.metadata.add_operation(
-                    operation='upload',
-                    path=filepath,
-                    status='error',
-                    size=os.path.getsize(filepath) if os.path.exists(filepath) else 0,
-                    details=error_msg
-                )
-                logging.error(f"Ошибка сети при синхронизации {filepath}: {error_msg}")
-
-            except yadisk.exceptions.UnauthorizedError:
-                error_msg = "Токен недействителен. Требуется повторная авторизация"
-                self.sync_status[filepath] = SyncStatus.ERROR
-                self.metadata.add_operation(
-                    operation='upload',
-                    path=filepath,
-                    status='error',
-                    size=os.path.getsize(filepath) if os.path.exists(filepath) else 0,
-                    details=error_msg
-                )
-                logging.error(f"Ошибка авторизации при синхронизации {filepath}: {error_msg}")
-
-            except Exception as e:
-                # Универсальная обработка всех остальных ошибок
-                error_msg = str(e)
-                # Обрезаем слишком длинные сообщения
-                if len(error_msg) > 100:
-                    error_msg = error_msg[:97] + "..."
-                
-                self.sync_status[filepath] = SyncStatus.ERROR
-                self.metadata.add_operation(
-                    operation='upload',
-                    path=filepath,
-                    status='error',
-                    size=os.path.getsize(filepath) if os.path.exists(filepath) else 0,
-                    details=error_msg
-                )
-                logging.error(f"Ошибка синхронизации {filepath}: {error_msg}")
+        except requests.exceptions.Timeout:
+            error_msg = "Таймаут подключения к Яндекс.Диску"
+            self.sync_status[filepath] = SyncStatus.ERROR
+            self.metadata.add_operation(
+                operation='upload',
+                path=filepath,
+                status='error',
+                size=os.path.getsize(filepath) if os.path.exists(filepath) else 0,
+                details=error_msg
+            )
+            logging.error(f"Таймаут при синхронизации {filepath}: {error_msg}")
+        
+        except requests.exceptions.ConnectionError:
+            error_msg = "Нет подключения к интернету"
+            self.sync_status[filepath] = SyncStatus.ERROR
+            self.metadata.add_operation(
+                operation='upload',
+                path=filepath,
+                status='error',
+                size=os.path.getsize(filepath) if os.path.exists(filepath) else 0,
+                details=error_msg
+            )
+            logging.error(f"Ошибка сети при синхронизации {filepath}: {error_msg}")
+        
+        except yadisk.exceptions.UnauthorizedError:
+            error_msg = "Токен недействителен. Требуется повторная авторизация"
+            self.sync_status[filepath] = SyncStatus.ERROR
+            self.metadata.add_operation(
+                operation='upload',
+                path=filepath,
+                status='error',
+                size=os.path.getsize(filepath) if os.path.exists(filepath) else 0,
+                details=error_msg
+            )
+            logging.error(f"Ошибка авторизации при синхронизации {filepath}: {error_msg}")
+        
+        except Exception as e:
+            error_msg = str(e)
+            if len(error_msg) > 100:
+                error_msg = error_msg[:97] + "..."
+            self.sync_status[filepath] = SyncStatus.ERROR
+            self.metadata.add_operation(
+                operation='upload',
+                path=filepath,
+                status='error',
+                size=os.path.getsize(filepath) if os.path.exists(filepath) else 0,
+                details=error_msg
+            )
+            logging.error(f"Ошибка синхронизации {filepath}: {error_msg}")
     
     def _check_cloud_changes(self, folder: Dict):
         """Проверка изменений в облаке для двусторонней синхронизации"""
@@ -435,7 +429,7 @@ class SyncEngine:
             )
             logging.info(f"Скачан файл: {remote_path} -> {local_path}")
             
-                except requests.exceptions.Timeout:
+        except requests.exceptions.Timeout:
             error_msg = "Таймаут подключения к Яндекс.Диску"
             self.metadata.add_operation(
                 operation='download',
@@ -445,7 +439,7 @@ class SyncEngine:
                 details=error_msg
             )
             logging.error(f"Таймаут при скачивании {rel_path}: {error_msg}")
-
+        
         except requests.exceptions.ConnectionError:
             error_msg = "Нет подключения к интернету"
             self.metadata.add_operation(
@@ -456,7 +450,7 @@ class SyncEngine:
                 details=error_msg
             )
             logging.error(f"Ошибка сети при скачивании {rel_path}: {error_msg}")
-
+        
         except yadisk.exceptions.UnauthorizedError:
             error_msg = "Токен недействителен. Требуется повторная авторизация"
             self.metadata.add_operation(
@@ -467,12 +461,11 @@ class SyncEngine:
                 details=error_msg
             )
             logging.error(f"Ошибка авторизации при скачивании {rel_path}: {error_msg}")
-
+        
         except Exception as e:
             error_msg = str(e)
             if len(error_msg) > 100:
                 error_msg = error_msg[:97] + "..."
-            
             self.metadata.add_operation(
                 operation='download',
                 path=str(local_path),
