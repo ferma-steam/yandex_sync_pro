@@ -57,22 +57,20 @@ class TrayManager:
     
     def _create_menu(self) -> Menu:
         """Создание меню системного трея"""
-        def on_open():
+        def on_open(icon):
             self.toggle_callback()
         
-        def on_start():
+        def on_start(icon):
             folders = self.sync_engine.sync_folders
             if folders:
                 self.sync_engine.start_sync(folders)
                 self.update_icon('active')
-                self.show_notification("Синхронизация запущена", "Yandex Disk Sync Pro")
         
-        def on_stop():
+        def on_stop(icon):
             self.sync_engine.stop_sync()
             self.update_icon('inactive')
-            self.show_notification("Синхронизация остановлена", "Yandex Disk Sync Pro")
         
-        def on_exit():
+        def on_exit(icon):
             self.stop()
             self.exit_callback()
         
