@@ -1,1 +1,1 @@
-Nothing should be ignored based on the provided file changes. The only modified file is a Python source file (`yandex_sync_pro/ui/settings_dialog.py`), which should not be added to .gitignore.
+Nothing should be ignored based on the provided file changes, as only a source code file (`yandex_sync_pro/main.py`) was modified and no build artifacts, dependencies, or temporary files were detected.
