@@ -1,46 +1,41 @@
 ```
-# Dependencies
+# Python
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
-.Python
-env/
-venv/
+
+# Dependencies
 .venv/
+venv/
+env/
 .env
 .env.local
 .env.*
 
-# Build artifacts
-build/
-dist/
-*.egg-info/
-
-# Logs
+# Logs and temp files
 *.log
-
-# OS generated files
-.DS_Store
-Thumbs.db
+*.tmp
 
 # Editors
 .vscode/
 .idea/
 *.swp
 *.swo
-*.tmp
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
 
 # Testing
 .coverage
 htmlcov/
 .coverage.*
-.nyc_output/
-coverage-final.json
+.nox/
+.tox/
 
-# Python specific
-*.so
-.Python
-*.sqlite3
-*.db
+# OS generated files
+.DS_Store
+Thumbs.db
 ```
